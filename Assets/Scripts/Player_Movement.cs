@@ -2,11 +2,11 @@
 using System.Collections.Generic;
 using UnityEngine;
 
-[RequireComponent(typeof(Rigidbody2D))]
+[RequireComponent(typeof(Rigidbody2D), typeof(Animator))]
 public class Player_Movement : MonoBehaviour
 {
     private Rigidbody2D _playerRb;
-
+    private Animator _playerAnimator;
     [Header("Movement")]
     [SerializeField] private float _speed;
 
@@ -20,31 +20,16 @@ public class Player_Movement : MonoBehaviour
     [Header("Crawling")]
     [SerializeField] private Transform _cellCheck;
     [SerializeField] private Collider2D _headCollider;
-   
-    private float _move;
-    private bool _canJump;
-    private bool _jump;
+ 
+    private bool _grounded;
     private int _jumpCount;
-    private bool _crawling;
     private bool _canStand;
-    private bool _faceRight;
+    private bool _faceRight = true;
 
     void Start()
     {
         _playerRb = GetComponent<Rigidbody2D>();
-    }
-
-    private void FixedUpdate()
-    {
-        if (Physics2D.OverlapCircle(_groundCheck.position, _radius, _whatIsGround))
-        {
-            _canJump = true;
-            _jumpCount = 0;
-        }
-        else
-            _canJump = false;
-
-        _canStand = !Physics2D.OverlapCircle(_cellCheck.position, _radius, _whatIsGround);
+        _playerAnimator = GetComponent<Animator>();
     }
 
     private void OnDrawGizmos()
@@ -54,43 +39,57 @@ public class Player_Movement : MonoBehaviour
         Gizmos.DrawWireSphere(_cellCheck.position, _radius);
     }
 
-    public void Move(float move, bool jump, bool crawling)
+    public void Move(float move, bool jump, bool crouch)
     {
-        if (_move != 0 && (_canJump || _airControll))
+        #region Animation
+        _playerAnimator.SetFloat("Speed", Mathf.Abs(move));
+        _playerAnimator.SetBool("Jump", !_grounded);
+        _playerAnimator.SetBool("Crouch", !_headCollider.enabled);
+        #endregion
+        #region Horizontalmovement
+        if (move != 0 && (_grounded || _airControll))
         {
-            _playerRb.velocity = new Vector2(_speed * _move, _playerRb.velocity.y);
+            _playerRb.velocity = new Vector2(_speed * move, _playerRb.velocity.y);
         }
-        else if (_move == 0 && _canJump)
+        else if (move == 0 && _grounded)
             _playerRb.velocity = new Vector2(0, _playerRb.velocity.y);
 
-        if(move>0 && !_faceRight)
+        if (move > 0 && !_faceRight)
         {
             Flip();
         }
-        else if(move <0 && _faceRight)
+        else if (move < 0 && _faceRight)
         {
             Flip();
         }
+        #endregion
+        #region Jumping
+        if (Physics2D.OverlapCircle(_groundCheck.position, _radius, _whatIsGround))
+        {
+            _grounded = true;
+            _jumpCount = 0;
+        }
+        else
+            _grounded = false;
 
-        if (_jump && (_canJump || _jumpCount < 2))
+        if (jump && (_grounded || _jumpCount < 2))
         {
             _jumpCount++;
-            if (_jumpCount == 2)
-            {
-                _playerRb.velocity = new Vector2(_playerRb.velocity.x, 0);
-            }
-            _playerRb.AddForce(Vector2.up * _jumpForce);
-            _jump = false;
+            _playerRb.velocity = new Vector2(_playerRb.velocity.x, _jumpForce);
         }
 
-        if (_crawling)
+        #endregion
+        #region Crouching
+        _canStand = !Physics2D.OverlapCircle(_cellCheck.position, _radius, _whatIsGround);
+        if (crouch)
         {
             _headCollider.enabled = false;
         }
-        else if (!_crawling && _canStand)
+        else if (!crouch && _canStand)
         {
             _headCollider.enabled = true;
         }
+        #endregion 
     }
     private void Flip()
     {
